@@ -49,7 +49,7 @@ use std::{mem, slice};
 /// A generic trait for converting a *const c_str to another Rust type
 pub trait FromCStr {
     /// Copy the c_str into the returned type
-    fn from_c_str(c_str: *const libc::c_char) -> Self;
+    unsafe fn from_c_str(c_str: *const libc::c_char) -> Self;
 }
 
 /// A generic trait for converting a value to a CString.
@@ -156,50 +156,46 @@ impl ToCStr for String {
 
 impl FromCStr for String {
     #[inline]
-    fn from_c_str(c_str: *const libc::c_char) -> String {
+    unsafe fn from_c_str(c_str: *const libc::c_char) -> String {
         let mut count = 0i;
 
-        unsafe {
-            loop {
-                let tmp = ::std::intrinsics::offset(c_str, count);
+        loop {
+            let tmp = ::std::intrinsics::offset(c_str, count);
 
-                if *tmp == 0i8 {
-                    break;
-                }
-                count += 1;
+            if *tmp == 0i8 {
+                break;
             }
-            if count == 0 {
-                String::new()
-            } else {
-                let v : Vec<u8> = Vec::from_raw_buf(c_str as *const u8, count as uint);
+            count += 1;
+        }
+        if count == 0 {
+            String::new()
+        } else {
+            let v : Vec<u8> = Vec::from_raw_buf(c_str as *const u8, count as uint);
 
-                String::from_utf8_unchecked(v)
-            }
+            String::from_utf8_unchecked(v)
         }
     }
 }
 
 impl FromCStr for CString {
     #[inline]
-    fn from_c_str(c_str: *const libc::c_char) -> CString {
+    unsafe fn from_c_str(c_str: *const libc::c_char) -> CString {
         let mut count = 0i;
 
-        unsafe {
-            loop {
-                let tmp = ::std::intrinsics::offset(c_str, count);
+        loop {
+            let tmp = ::std::intrinsics::offset(c_str, count);
 
-                if *tmp == 0i8 {
-                    break;
-                }
-                count += 1;
+            if *tmp == 0i8 {
+                break;
             }
-            if count == 0 {
-                CString::from_slice(&[0u8])
-            } else {
-                let v : Vec<u8> = Vec::from_raw_buf(c_str as *const u8, count as uint);
+            count += 1;
+        }
+        if count == 0 {
+            CString::from_slice(&[0u8])
+        } else {
+            let v : Vec<u8> = Vec::from_raw_buf(c_str as *const u8, count as uint);
 
-                CString::from_slice(v.as_slice())
-            }
+            CString::from_slice(v.as_slice())
         }
     }
 }
