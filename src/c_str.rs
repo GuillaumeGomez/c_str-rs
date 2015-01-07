@@ -1,6 +1,5 @@
-// Copyright 2012 The Rust Project Developers. See the COPYRIGHT
-// file at the top-level directory of this distribution and at
-// http://rust-lang.org/COPYRIGHT.
+// Copyright (c) 2012 The Rust Project Developers
+// Copyright (c) 2015 Guillaume Gomez
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
 // http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
@@ -40,262 +39,15 @@
 //! if you intend to do that on your own, as the behaviour if you free them with
 //! Rust's allocator API is not well defined
 //!
-//! An example of creating and using a C string would be:
-//!
-//! ```rust
-//! extern crate libc;
-//!
-//! use std::c_str::ToCStr;
-//!
-//! extern {
-//!     fn puts(s: *const libc::c_char);
-//! }
-//!
-//! fn main() {
-//!     let my_string = "Hello, world!";
-//!
-//!     // Allocate the C string with an explicit local that owns the string. The
-//!     // `c_buffer` pointer will be deallocated when `my_c_string` goes out of scope.
-//!     let my_c_string = my_string.to_c_str();
-//!     unsafe {
-//!         puts(my_c_string.as_ptr());
-//!     }
-//!
-//!     // Don't save/return the pointer to the C string, the `c_buffer` will be
-//!     // deallocated when this block returns!
-//!     my_string.with_c_str(|c_buffer| {
-//!         unsafe { puts(c_buffer); }
-//!     });
-//! }
-//! ```
 
-use core::prelude::*;
-use libc;
+extern crate libc;
 
-use cmp::Ordering;
-use fmt;
-use hash;
-use mem;
-use ptr;
-use slice::{self, IntSliceExt};
-use str;
-use string::String;
-use core::kinds::marker;
-
-/// The representation of a C String.
-///
-/// This structure wraps a `*libc::c_char`, and will automatically free the
-/// memory it is pointing to when it goes out of scope.
-#[allow(missing_copy_implementations)]
-pub struct CString {
-    buf: *const libc::c_char,
-    owns_buffer_: bool,
-}
-
-unsafe impl Send for CString { }
-unsafe impl Sync for CString { }
-
-impl Clone for CString {
-    /// Clone this CString into a new, uniquely owned CString. For safety
-    /// reasons, this is always a deep clone with the memory allocated
-    /// with C's allocator API, rather than the usual shallow clone.
-    fn clone(&self) -> CString {
-        let len = self.len() + 1;
-        let buf = unsafe { libc::malloc(len as libc::size_t) } as *mut libc::c_char;
-        if buf.is_null() { ::alloc::oom() }
-        unsafe { ptr::copy_nonoverlapping_memory(buf, self.buf, len); }
-        CString { buf: buf as *const libc::c_char, owns_buffer_: true }
-    }
-}
-
-impl PartialEq for CString {
-    fn eq(&self, other: &CString) -> bool {
-        // Check if the two strings share the same buffer
-        if self.buf as uint == other.buf as uint {
-            true
-        } else {
-            unsafe {
-                libc::strcmp(self.buf, other.buf) == 0
-            }
-        }
-    }
-}
-
-impl PartialOrd for CString {
-    #[inline]
-    fn partial_cmp(&self, other: &CString) -> Option<Ordering> {
-        self.as_bytes().partial_cmp(other.as_bytes())
-    }
-}
-
-impl Eq for CString {}
-
-impl<S: hash::Writer> hash::Hash<S> for CString {
-    #[inline]
-    fn hash(&self, state: &mut S) {
-        self.as_bytes().hash(state)
-    }
-}
-
-impl CString {
-    /// Create a C String from a pointer, with memory managed by C's allocator
-    /// API, so avoid calling it with a pointer to memory managed by Rust's
-    /// allocator API, as the behaviour would not be well defined.
-    ///
-    ///# Panics
-    ///
-    /// Panics if `buf` is null
-    pub unsafe fn new(buf: *const libc::c_char, owns_buffer: bool) -> CString {
-        assert!(!buf.is_null());
-        CString { buf: buf, owns_buffer_: owns_buffer }
-    }
-
-    /// Return a pointer to the NUL-terminated string data.
-    ///
-    /// `.as_ptr` returns an internal pointer into the `CString`, and
-    /// may be invalidated when the `CString` falls out of scope (the
-    /// destructor will run, freeing the allocation if there is
-    /// one).
-    ///
-    /// ```rust
-    /// use std::c_str::ToCStr;
-    ///
-    /// let foo = "some string";
-    ///
-    /// // right
-    /// let x = foo.to_c_str();
-    /// let p = x.as_ptr();
-    ///
-    /// // wrong (the CString will be freed, invalidating `p`)
-    /// let p = foo.to_c_str().as_ptr();
-    /// ```
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// extern crate libc;
-    ///
-    /// use std::c_str::ToCStr;
-    ///
-    /// fn main() {
-    ///     let c_str = "foo bar".to_c_str();
-    ///     unsafe {
-    ///         libc::puts(c_str.as_ptr());
-    ///     }
-    /// }
-    /// ```
-    pub fn as_ptr(&self) -> *const libc::c_char {
-        self.buf
-    }
-
-    /// Return a mutable pointer to the NUL-terminated string data.
-    ///
-    /// `.as_mut_ptr` returns an internal pointer into the `CString`, and
-    /// may be invalidated when the `CString` falls out of scope (the
-    /// destructor will run, freeing the allocation if there is
-    /// one).
-    ///
-    /// ```rust
-    /// use std::c_str::ToCStr;
-    ///
-    /// let foo = "some string";
-    ///
-    /// // right
-    /// let mut x = foo.to_c_str();
-    /// let p = x.as_mut_ptr();
-    ///
-    /// // wrong (the CString will be freed, invalidating `p`)
-    /// let p = foo.to_c_str().as_mut_ptr();
-    /// ```
-    pub fn as_mut_ptr(&mut self) -> *mut libc::c_char {
-        self.buf as *mut _
-    }
-
-    /// Returns whether or not the `CString` owns the buffer.
-    pub fn owns_buffer(&self) -> bool {
-        self.owns_buffer_
-    }
-
-    /// Converts the CString into a `&[u8]` without copying.
-    /// Includes the terminating NUL byte.
-    #[inline]
-    pub fn as_bytes<'a>(&'a self) -> &'a [u8] {
-        unsafe {
-            slice::from_raw_buf(&self.buf, self.len() + 1).as_unsigned()
-        }
-    }
-
-    /// Converts the CString into a `&[u8]` without copying.
-    /// Does not include the terminating NUL byte.
-    #[inline]
-    pub fn as_bytes_no_nul<'a>(&'a self) -> &'a [u8] {
-        unsafe {
-            slice::from_raw_buf(&self.buf, self.len()).as_unsigned()
-        }
-    }
-
-    /// Converts the CString into a `&str` without copying.
-    /// Returns None if the CString is not UTF-8.
-    #[inline]
-    pub fn as_str<'a>(&'a self) -> Option<&'a str> {
-        let buf = self.as_bytes_no_nul();
-        str::from_utf8(buf).ok()
-    }
-
-    /// Return a CString iterator.
-    pub fn iter<'a>(&'a self) -> CChars<'a> {
-        CChars {
-            ptr: self.buf,
-            marker: marker::ContravariantLifetime,
-        }
-    }
-
-    /// Unwraps the wrapped `*libc::c_char` from the `CString` wrapper.
-    ///
-    /// Any ownership of the buffer by the `CString` wrapper is
-    /// forgotten, meaning that the backing allocation of this
-    /// `CString` is not automatically freed if it owns the
-    /// allocation. In this case, a user of `.unwrap()` should ensure
-    /// the allocation is freed, to avoid leaking memory. You should
-    /// use libc's memory allocator in this case.
-    ///
-    /// Prefer `.as_ptr()` when just retrieving a pointer to the
-    /// string data, as that does not relinquish ownership.
-    pub unsafe fn into_inner(mut self) -> *const libc::c_char {
-        self.owns_buffer_ = false;
-        self.buf
-    }
-
-    /// Return the number of bytes in the CString (not including the NUL
-    /// terminator).
-    #[inline]
-    pub fn len(&self) -> uint {
-        unsafe { libc::strlen(self.buf) as uint }
-    }
-
-    /// Returns if there are no bytes in this string
-    #[inline]
-    pub fn is_empty(&self) -> bool { self.len() == 0 }
-}
-
-impl Drop for CString {
-    fn drop(&mut self) {
-        if self.owns_buffer_ {
-            unsafe {
-                libc::free(self.buf as *mut libc::c_void)
-            }
-        }
-    }
-}
-
-impl fmt::Show for CString {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        String::from_utf8_lossy(self.as_bytes_no_nul()).fmt(f)
-    }
-}
+use std::string::String;
+use std::ffi::CString;
+use std::{mem, slice};
 
 /// A generic trait for converting a value to a CString.
-pub trait ToCStr for Sized? {
+pub trait ToCStr {
     /// Copy the receiver into a CString.
     ///
     /// # Panics
@@ -401,20 +153,14 @@ const BUF_LEN: uint = 128;
 
 impl ToCStr for [u8] {
     fn to_c_str(&self) -> CString {
-        let mut cs = unsafe { self.to_c_str_unchecked() };
-        check_for_null(self, cs.as_mut_ptr());
+        let cs = unsafe { self.to_c_str_unchecked() };
+
+        check_for_null(self, cs.as_ptr() as *mut libc::c_char);
         cs
     }
 
     unsafe fn to_c_str_unchecked(&self) -> CString {
-        let self_len = self.len();
-        let buf = libc::malloc(self_len as libc::size_t + 1) as *mut u8;
-        if buf.is_null() { ::alloc::oom() }
-
-        ptr::copy_memory(buf, self.as_ptr(), self_len);
-        *buf.offset(self_len as int) = 0;
-
-        CString::new(buf as *const libc::c_char, true)
+        CString::from_slice(self)
     }
 
     fn with_c_str<T, F>(&self, f: F) -> T where
@@ -430,7 +176,7 @@ impl ToCStr for [u8] {
     }
 }
 
-impl<'a, Sized? T: ToCStr> ToCStr for &'a T {
+impl<'a, T: ToCStr> ToCStr for &'a T {
     #[inline]
     fn to_c_str(&self) -> CString {
         (**self).to_c_str()
@@ -493,7 +239,7 @@ fn check_for_null(v: &[u8], buf: *mut libc::c_char) {
 /// External iterator for a CString's bytes.
 ///
 /// Use with the `std::iter` module.
-#[allow(raw_pointer_deriving)]
+/*#[allow(raw_pointer_deriving)]
 #[derive(Clone)]
 pub struct CChars<'a> {
     ptr: *const libc::c_char,
@@ -512,7 +258,7 @@ impl<'a> Iterator for CChars<'a> {
             Some(ch)
         }
     }
-}
+}*/
 
 /// Parses a C "multistring", eg windows env values or
 /// the req->ptr result in a uv_fs_readdir() call.
@@ -537,7 +283,18 @@ pub unsafe fn from_c_multistring<F>(buf: *const libc::c_char,
     };
     while ((limited_count && ctr < limit) || !limited_count)
           && *(curr_ptr as *const libc::c_char) != 0 as libc::c_char {
-        let cstr = CString::new(curr_ptr as *const libc::c_char, false);
+        let mut v : Vec<u8> = Vec::new();
+        let mut decal = 0i;
+
+        loop {
+            let tmp : u8 = *::std::intrinsics::offset(curr_ptr as *const libc::c_uchar, decal);
+            if tmp == 0u8 {
+                break;
+            }
+            v.push(tmp);
+            decal += 1;
+        }
+        let cstr = CString::from_slice(v.as_slice());
         f(&cstr);
         curr_ptr += cstr.len() + 1;
         ctr += 1;

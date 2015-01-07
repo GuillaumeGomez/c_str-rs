@@ -1,0 +1,14 @@
+[package]
+name = "c_str"
+version = "1.0.0"
+authors = ["Guillaume Gomez <guillaume1.gomez@gmail.com>"]
+
+description = "The old c_str functions"
+repository = "https://github.com/GuillaumeGomez/c_str-rs.git"
+readme = "README.md"
+keywords = ["c", "string", "c_str"]
+license = "Apache-2.0/MIT"
+
+[lib]
+name = "c_str"
+crate-type = ["dylib", "rlib"]
