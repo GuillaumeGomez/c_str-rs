@@ -46,6 +46,12 @@ use std::string::String;
 use std::ffi::CString;
 use std::{mem, slice};
 
+/// A generic trait for converting a *const c_str to another Rust type
+pub trait FromCStr {
+    /// Copy the c_str into the returned type
+    fn from_c_str(c_str: *const libc::c_char) -> Self;
+}
+
 /// A generic trait for converting a value to a CString.
 pub trait ToCStr {
     /// Copy the receiver into a CString.
@@ -145,6 +151,56 @@ impl ToCStr for String {
         F: FnOnce(*const libc::c_char) -> T,
     {
         self.as_bytes().with_c_str_unchecked(f)
+    }
+}
+
+impl FromCStr for String {
+    #[inline]
+    fn from_c_str(c_str: *const libc::c_char) -> String {
+        let mut count = 0i;
+
+        unsafe {
+            loop {
+                let tmp = ::std::intrinsics::offset(c_str, count);
+
+                if *tmp == 0i8 {
+                    break;
+                }
+                count += 1;
+            }
+            if count == 0 {
+                String::new()
+            } else {
+                let v : Vec<u8> = Vec::from_raw_buf(c_str as *const u8, count as uint);
+
+                String::from_utf8_unchecked(v)
+            }
+        }
+    }
+}
+
+impl FromCStr for CString {
+    #[inline]
+    fn from_c_str(c_str: *const libc::c_char) -> CString {
+        let mut count = 0i;
+
+        unsafe {
+            loop {
+                let tmp = ::std::intrinsics::offset(c_str, count);
+
+                if *tmp == 0i8 {
+                    break;
+                }
+                count += 1;
+            }
+            if count == 0 {
+                CString::from_slice(&[0u8])
+            } else {
+                let v : Vec<u8> = Vec::from_raw_buf(c_str as *const u8, count as uint);
+
+                CString::from_slice(v.as_slice())
+            }
+        }
     }
 }
 
