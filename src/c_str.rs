@@ -50,6 +50,8 @@ use std::{mem, slice};
 pub trait FromCStr {
     /// Copy the c_str into the returned type
     unsafe fn from_c_str(c_str: *const libc::c_char) -> Self;
+    /// the same as from_c_str but for old code compatibility
+    unsafe fn from_raw_buf(c_str: *const u8) -> Self;
 }
 
 /// A generic trait for converting a value to a CString.
@@ -175,6 +177,11 @@ impl FromCStr for String {
             String::from_utf8_unchecked(v)
         }
     }
+
+    #[inline]
+    unsafe fn from_raw_buf(c_str: *const u8) -> String {
+        FromCStr::from_c_str(c_str as *const libc::c_char)
+    }
 }
 
 impl FromCStr for CString {
@@ -197,6 +204,11 @@ impl FromCStr for CString {
 
             CString::from_slice(v.as_slice())
         }
+    }
+
+    #[inline]
+    unsafe fn from_raw_buf(c_str: *const u8) -> CString {
+        FromCStr::from_c_str(c_str as *const libc::c_char)
     }
 }
 
