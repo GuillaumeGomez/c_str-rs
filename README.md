@@ -24,7 +24,7 @@ fn some_other_func(rstr: &str) {
 }
 ```
 
-USAGE
+Usage
 =====
 
 You can use it directly by adding this line to your `Cargo.toml` file:
