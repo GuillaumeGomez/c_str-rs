@@ -40,6 +40,8 @@
 //! Rust's allocator API is not well defined
 //!
 
+#![allow(unstable)]
+
 extern crate libc;
 
 use std::string::String;
@@ -159,7 +161,7 @@ impl ToCStr for String {
 impl FromCStr for String {
     #[inline]
     unsafe fn from_c_str(c_str: *const libc::c_char) -> String {
-        let mut count = 0i;
+        let mut count = 0is;
 
         loop {
             let tmp = ::std::intrinsics::offset(c_str, count);
@@ -172,7 +174,7 @@ impl FromCStr for String {
         if count == 0 {
             String::new()
         } else {
-            let v : Vec<u8> = Vec::from_raw_buf(c_str as *const u8, count as uint);
+            let v : Vec<u8> = Vec::from_raw_buf(c_str as *const u8, count as usize);
 
             String::from_utf8_unchecked(v)
         }
@@ -187,7 +189,7 @@ impl FromCStr for String {
 impl FromCStr for CString {
     #[inline]
     unsafe fn from_c_str(c_str: *const libc::c_char) -> CString {
-        let mut count = 0i;
+        let mut count = 0is;
 
         loop {
             let tmp = ::std::intrinsics::offset(c_str, count);
@@ -200,7 +202,7 @@ impl FromCStr for CString {
         if count == 0 {
             CString::from_slice(&[0u8])
         } else {
-            let v : Vec<u8> = Vec::from_raw_buf(c_str as *const u8, count as uint);
+            let v : Vec<u8> = Vec::from_raw_buf(c_str as *const u8, count as usize);
 
             CString::from_slice(v.as_slice())
         }
@@ -213,7 +215,7 @@ impl FromCStr for CString {
 }
 
 // The length of the stack allocated buffer for `vec.with_c_str()`
-const BUF_LEN: uint = 128;
+const BUF_LEN: usize = 128;
 
 impl ToCStr for [u8] {
     fn to_c_str(&self) -> CString {
@@ -252,15 +254,15 @@ impl<'a, T: ToCStr> ToCStr for &'a T {
     }
 
     #[inline]
-    fn with_c_str<T, F>(&self, f: F) -> T where
-        F: FnOnce(*const libc::c_char) -> T,
+    fn with_c_str<U, F>(&self, f: F) -> U where
+        F: FnOnce(*const libc::c_char) -> U,
     {
         (**self).with_c_str(f)
     }
 
     #[inline]
-    unsafe fn with_c_str_unchecked<T, F>(&self, f: F) -> T where
-        F: FnOnce(*const libc::c_char) -> T,
+    unsafe fn with_c_str_unchecked<U, F>(&self, f: F) -> U where
+        F: FnOnce(*const libc::c_char) -> U,
     {
         (**self).with_c_str_unchecked(f)
     }
@@ -294,7 +296,7 @@ unsafe fn with_c_str<T, F>(v: &[u8], checked: bool, f: F) -> T where
 fn check_for_null(v: &[u8], buf: *mut libc::c_char) {
     for i in range(0, v.len()) {
         unsafe {
-            let p = buf.offset(i as int);
+            let p = buf.offset(i as isize);
             assert!(*p != 0);
         }
     }
@@ -333,13 +335,13 @@ impl<'a> Iterator for CChars<'a> {
 /// The specified closure is invoked with each string that
 /// is found, and the number of strings found is returned.
 pub unsafe fn from_c_multistring<F>(buf: *const libc::c_char,
-                                    count: Option<uint>,
+                                    count: Option<usize>,
                                     mut f: F)
-                                    -> uint where
+                                    -> usize where
     F: FnMut(&CString),
 {
 
-    let mut curr_ptr: uint = buf as uint;
+    let mut curr_ptr: usize = buf as usize;
     let mut ctr = 0;
     let (limited_count, limit) = match count {
         Some(limit) => (true, limit),
@@ -348,7 +350,7 @@ pub unsafe fn from_c_multistring<F>(buf: *const libc::c_char,
     while ((limited_count && ctr < limit) || !limited_count)
           && *(curr_ptr as *const libc::c_char) != 0 as libc::c_char {
         let mut v : Vec<u8> = Vec::new();
-        let mut decal = 0i;
+        let mut decal = 0is;
 
         loop {
             let tmp : u8 = *::std::intrinsics::offset(curr_ptr as *const libc::c_uchar, decal);

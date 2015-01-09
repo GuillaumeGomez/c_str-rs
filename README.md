@@ -9,7 +9,7 @@ extern crate c_str;
 
 use c_str::{FromCStr, ToCStr};
 
-fn some_func(cstr: *const libc::char) {
+fn some_func(cstr: *const libc::c_char) {
     let s : String = FromCStr::from_c_str(cstr);
 
     println!("converted from c string: {}", s);
@@ -31,7 +31,7 @@ You can use it directly by adding this line to your `Cargo.toml` file:
 
 ```Rust
 [dependencies]
-c_str = "1.0.1"
+c_str = "^1.0.0"
 ```
 
 Here's is the [crates.io](https://crates.io/crates/c_str) page for `c_str`.
