@@ -40,7 +40,7 @@
 //! Rust's allocator API is not well defined
 //!
 
-#![allow(unstable)]
+#![feature(std_misc, core, collections, libc)]
 
 extern crate libc;
 
