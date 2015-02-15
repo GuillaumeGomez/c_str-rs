@@ -17,8 +17,8 @@ fn some_func(cstr: *const libc::c_char) {
 
 fn some_other_func(rstr: &str) {
     unsafe {
-        some_c_func(rstr.with_c_str(|s| {
-            s
+        rstr.with_c_str(|s| {
+            some_c_func(s)
         })
     }
 }
