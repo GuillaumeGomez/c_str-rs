@@ -24,6 +24,31 @@ fn some_other_func(rstr: &str) {
 }
 ```
 
+Equivalent in Rust
+==================
+
+Here is the equivalent in pure Rust:
+
+```Rust
+fn from_c_func(cstr: *const libc::c_char) -> String {
+    FromCStr::from_c_str(tmp)
+    // equivalent in rust:
+    String::from_utf8_lossy(::std::ffi::c_str_to_bytes(&tmp).to_string())
+}
+
+fn main() {
+    let s = "hello";
+
+    s.with_c_str(|cstr| {
+        from_c_func(cstr)
+    });
+    // equivalent in rust:
+    let cstring = CString::from_slice(s.as_bytes());
+
+    from_c_func(cstring.as_ptr());
+}
+```
+
 Usage
 =====
 
