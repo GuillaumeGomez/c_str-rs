@@ -161,7 +161,7 @@ impl ToCStr for String {
 impl FromCStr for String {
     #[inline]
     unsafe fn from_c_str(c_str: *const libc::c_char) -> String {
-        let mut count = 0is;
+        let mut count = 0isize;
 
         loop {
             let tmp = ::std::intrinsics::offset(c_str, count);
@@ -189,7 +189,7 @@ impl FromCStr for String {
 impl FromCStr for CString {
     #[inline]
     unsafe fn from_c_str(c_str: *const libc::c_char) -> CString {
-        let mut count = 0is;
+        let mut count = 0isize;
 
         loop {
             let tmp = ::std::intrinsics::offset(c_str, count);
@@ -200,11 +200,11 @@ impl FromCStr for CString {
             count += 1;
         }
         if count == 0 {
-            CString::from_slice(&[0u8])
+            CString::new("\0").unwrap()
         } else {
             let v : Vec<u8> = Vec::from_raw_buf(c_str as *const u8, count as usize);
 
-            CString::from_slice(v.as_slice())
+            CString::new(v.as_slice()).unwrap()
         }
     }
 
@@ -226,7 +226,7 @@ impl ToCStr for [u8] {
     }
 
     unsafe fn to_c_str_unchecked(&self) -> CString {
-        CString::from_slice(self)
+        CString::new(self).unwrap()
     }
 
     fn with_c_str<T, F>(&self, f: F) -> T where
@@ -350,7 +350,7 @@ pub unsafe fn from_c_multistring<F>(buf: *const libc::c_char,
     while ((limited_count && ctr < limit) || !limited_count)
           && *(curr_ptr as *const libc::c_char) != 0 as libc::c_char {
         let mut v : Vec<u8> = Vec::new();
-        let mut decal = 0is;
+        let mut decal = 0isize;
 
         loop {
             let tmp : u8 = *::std::intrinsics::offset(curr_ptr as *const libc::c_uchar, decal);
@@ -360,9 +360,9 @@ pub unsafe fn from_c_multistring<F>(buf: *const libc::c_char,
             v.push(tmp);
             decal += 1;
         }
-        let cstr = CString::from_slice(v.as_slice());
+        let cstr = CString::new(v.as_slice()).unwrap();
         f(&cstr);
-        curr_ptr += cstr.len() + 1;
+        curr_ptr += cstr.as_bytes().len() + 1;
         ctr += 1;
     }
     return ctr;
