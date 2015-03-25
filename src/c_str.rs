@@ -40,7 +40,7 @@
 //! Rust's allocator API is not well defined
 //!
 
-#![feature(std_misc, core, collections, libc)]
+#![feature(core, collections, libc)]
 
 extern crate libc;
 
@@ -204,7 +204,7 @@ impl FromCStr for CString {
         } else {
             let v : Vec<u8> = Vec::from_raw_buf(c_str as *const u8, count as usize);
 
-            CString::new(v.as_slice()).unwrap()
+            CString::new(v).unwrap()
         }
     }
 
@@ -294,7 +294,7 @@ unsafe fn with_c_str<T, F>(v: &[u8], checked: bool, f: F) -> T where
 
 #[inline]
 fn check_for_null(v: &[u8], buf: *mut libc::c_char) {
-    for i in range(0, v.len()) {
+    for i in 0..v.len() {
         unsafe {
             let p = buf.offset(i as isize);
             assert!(*p != 0);
@@ -360,7 +360,7 @@ pub unsafe fn from_c_multistring<F>(buf: *const libc::c_char,
             v.push(tmp);
             decal += 1;
         }
-        let cstr = CString::new(v.as_slice()).unwrap();
+        let cstr = CString::new(v).unwrap();
         f(&cstr);
         curr_ptr += cstr.as_bytes().len() + 1;
         ctr += 1;
