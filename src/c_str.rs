@@ -370,11 +370,11 @@ pub unsafe fn from_c_multistring<F>(buf: *const libc::c_char,
 
 #[cfg(test)]
 mod tests {
-    use prelude::v1::*;
     use super::*;
-    use ptr;
-    use thread::Thread;
+    use std::thread::Thread;
     use libc;
+    use std::ptr;
+    use std::ffi::CString;
 
     #[test]
     fn test_str_multistring_parsing() {
@@ -522,7 +522,7 @@ mod tests {
     }
 
     #[test]
-    #[should_fail]
+    #[should_panic]
     fn test_new_fail() {
         let _c_str = unsafe { CString::new(ptr::null(), false) };
     }
@@ -563,19 +563,18 @@ mod tests {
 mod bench {
     extern crate test;
 
-    use prelude::v1::*;
+    //use prelude::v1::*;
     use self::test::Bencher;
     use libc;
-    use c_str::ToCStr;
 
     #[inline]
     fn check(s: &str, c_str: *const libc::c_char) {
         let s_buf = s.as_ptr();
-        for i in range(0, s.len()) {
+        for i in 0..s.len() {
             unsafe {
                 assert_eq!(
-                    *s_buf.offset(i as int) as libc::c_char,
-                    *c_str.offset(i as int));
+                    *s_buf.offset(i as isize) as libc::c_char,
+                    *c_str.offset(i as isize));
             }
         }
     }
