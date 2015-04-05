@@ -40,7 +40,7 @@
 //! Rust's allocator API is not well defined
 //!
 
-#![feature(core, collections, libc)]
+#![feature(core, collections, libc, convert)]
 
 extern crate libc;
 
@@ -274,7 +274,8 @@ unsafe fn with_c_str<T, F>(v: &[u8], checked: bool, f: F) -> T where
 {
     let c_str = if v.len() < BUF_LEN {
         let mut buf: [u8; BUF_LEN] = mem::uninitialized();
-        slice::bytes::copy_memory(&mut buf, v);
+        let mut copy_: Vec<u8> = Vec::from(v);
+        slice::bytes::copy_memory(&mut buf, copy_.as_mut_slice());
         buf[v.len()] = 0;
 
         let buf = buf.as_mut_ptr();
